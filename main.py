@@ -313,9 +313,11 @@ meteor_sprites = pygame.sprite.Group()
 laser_sprites = pygame.sprite.Group()
 reset_game()
 
-# Custom events -> meteor event
-meteor_event = pygame.event.custom_type()
-pygame.time.set_timer(meteor_event, 300)
+# Meteor spawn timing.
+# pygame.time.set_timer is not implemented on WASM (pygbag), so meteors spawn
+# from a manual accumulator in the main loop instead of a repeating timer event.
+METEOR_SPAWN_INTERVAL = 0.3  # seconds
+meteor_spawn_timer = 0.0
 
 # ---- touch control state (phone / pygbag web build) ----
 JOYSTICK_CENTER = pygame.Vector2(150, window_height - 150)
@@ -342,17 +344,24 @@ async def main():
     global running, game_state
     global joystick_finger_id, joystick_offset, fire_finger_id, touch_ultimate_triggered
     global laser_sound, explosion_sound, damage_sound
+    global meteor_spawn_timer
 
     audio_ready = False
 
     while running:
         dt = clock.tick(60) / 1000
+
+        # spawn meteors on a fixed interval (replaces pygame.time.set_timer)
+        if game_state == "playing":
+            meteor_spawn_timer += dt
+            while meteor_spawn_timer >= METEOR_SPAWN_INTERVAL:
+                meteor_spawn_timer -= METEOR_SPAWN_INTERVAL
+                Meteor(meteor_surf, (random.randint(0, window_width), 0), (all_sprites, meteor_sprites))
+
         # event loop
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == meteor_event:
-                Meteor(meteor_surf,(random.randint(0, window_width), 0), (all_sprites, meteor_sprites))
 
             # --- touch input ---
             if event.type == pygame.FINGERDOWN:
