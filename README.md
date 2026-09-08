@@ -17,7 +17,7 @@ A pygame-ce space shooter, built for the browser and mobile with [pygbag](https:
 **Fullscreen on mobile:** works in Android Chrome/Firefox and iPadOS Safari.
 iPhone Safari has no Fullscreen API — the button shows a hint instead. For a
 chromeless view there, use Share → Add to Home Screen and launch from the icon
-(the build ships the `apple-mobile-web-app-capable` meta tags for this).
+(pygbag ships the `apple-mobile-web-app-capable` meta for this).
 
 ## Project layout
 
