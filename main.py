@@ -9,7 +9,6 @@ clock = pygame.time.Clock()
 # running inside the pygbag/emscripten browser build?
 _web = sys.platform == "emscripten"
 fullscreen = False
-_fs_supported = not _web          # desktop always; web decided at startup
 _fs_hint_until = 0                # show the "add to home screen" hint until this tick
 
 # classes
@@ -329,8 +328,8 @@ def toggle_fullscreen():
     global fullscreen, display_surface, _fs_hint_until
     if _web:
         import platform
-        doc = platform.document
         try:
+            doc = platform.window.document  # full JS proxy (platform.document is a partial shim)
             in_fs = (getattr(doc, "fullscreenElement", None)
                      or getattr(doc, "webkitFullscreenElement", None)
                      or getattr(doc, "webkitCurrentFullScreenElement", None))
@@ -365,23 +364,21 @@ game_state = "playing"
 HIGH_SCORE_FILE = join(dirname(abspath(__file__)), "highscore.txt")
 high_score = load_high_score()
 
-# ---- web build: enable "Add to Home Screen" fullscreen + probe the Fullscreen API ----
+# ---- web build: harden the home-screen PWA ----
+# pygbag already ships apple-/mobile-web-app-capable, so "Add to Home Screen"
+# already launches fullscreen; add the status-bar style and app title on top.
 if _web:
     import platform as _platform
     try:
-        _doc = _platform.document
-        for _n, _c in (("apple-mobile-web-app-capable", "yes"),
-                       ("mobile-web-app-capable", "yes"),
-                       ("apple-mobile-web-app-status-bar-style", "black-translucent"),
+        _doc = _platform.window.document
+        for _n, _c in (("apple-mobile-web-app-status-bar-style", "black-translucent"),
                        ("apple-mobile-web-app-title", "Kirk Shooter")):
             _m = _doc.createElement("meta")
             _m.setAttribute("name", _n)
             _m.setAttribute("content", _c)
             _doc.head.appendChild(_m)
-        _fs_supported = bool(_js_pick(_doc.documentElement, "requestFullscreen",
-                                     "webkitRequestFullscreen", "webkitRequestFullScreen"))
     except Exception:
-        _fs_supported = False
+        pass
 
 # imports
 font = pygame.font.Font("images/Oxanium-Bold.ttf", 40)
