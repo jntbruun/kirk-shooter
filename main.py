@@ -6,6 +6,10 @@ from os.path import join, dirname, abspath
 
 clock = pygame.time.Clock()
 
+# running inside the pygbag/emscripten browser build?
+_web = sys.platform == "emscripten"
+fullscreen = False
+
 # classes
 class Player(pygame.sprite.Sprite):
     def __init__(self, groups):
@@ -230,7 +234,20 @@ def draw_touch_controls():
     ult_label = small_font.render("ULT", True, (255, 255, 255))
     touch_ui_surface.blit(ult_label, ult_label.get_frect(center = ULTIMATE_BUTTON_CENTER))
 
+    draw_fullscreen_button(touch_ui_surface)
+
     display_surface.blit(touch_ui_surface, (0, 0))
+
+def draw_fullscreen_button(surface):
+    # standard corner-brackets glyph, top-right
+    pygame.draw.circle(surface, (255, 255, 255, 45), FULLSCREEN_BUTTON_CENTER, FULLSCREEN_BUTTON_RADIUS)
+    pygame.draw.circle(surface, (255, 255, 255, 130), FULLSCREEN_BUTTON_CENTER, FULLSCREEN_BUTTON_RADIUS, 2)
+    cx, cy = FULLSCREEN_BUTTON_CENTER
+    arm, gap = 7, 6
+    for sx, sy in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
+        corner = (cx + sx * gap, cy + sy * gap)
+        pygame.draw.line(surface, (255, 255, 255, 210), corner, (corner[0] + sx * arm, corner[1]), 3)
+        pygame.draw.line(surface, (255, 255, 255, 210), corner, (corner[0], corner[1] + sy * arm), 3)
 
 def reset_game():
     global player, round_start_time, meteors_killed
@@ -264,6 +281,10 @@ def game_over_screen():
     prompt_rect = prompt_surf.get_frect(center = (window_width / 2, window_height / 2 + 160))
     display_surface.blit(prompt_surf, prompt_rect)
 
+    touch_ui_surface.fill((0, 0, 0, 0))
+    draw_fullscreen_button(touch_ui_surface)
+    display_surface.blit(touch_ui_surface, (0, 0))
+
 def get_score():
     #return (pygame.time.get_ticks() - round_start_time) // 100
     return meteors_killed
@@ -278,6 +299,25 @@ def load_high_score():
 def save_high_score(score):
     with open(HIGH_SCORE_FILE, "w") as f:
         f.write(str(score))
+
+def toggle_fullscreen():
+    # F key or the top-right button. On the web build this drives the browser's
+    # Fullscreen API (must be called straight from an input event to count as a
+    # user gesture); on desktop it flips the SDL window.
+    global fullscreen, display_surface
+    if _web:
+        import platform
+        try:
+            if platform.document.fullscreenElement:
+                platform.document.exitFullscreen()
+            else:
+                platform.window.canvas.requestFullscreen()
+        except Exception:
+            pass  # browser refused (no gesture / disabled) — game keeps running
+    else:
+        fullscreen = not fullscreen
+        flags = (pygame.FULLSCREEN | pygame.SCALED) if fullscreen else 0
+        display_surface = pygame.display.set_mode((window_width, window_height), flags)
 
 # gen setup
 pygame.display.init()
@@ -331,6 +371,9 @@ FIRE_BUTTON_RADIUS = 75
 ULTIMATE_BUTTON_CENTER = pygame.Vector2(window_width - 120, window_height - 260)
 ULTIMATE_BUTTON_RADIUS = 55
 
+FULLSCREEN_BUTTON_CENTER = pygame.Vector2(window_width - 55, 55)
+FULLSCREEN_BUTTON_RADIUS = 30
+
 joystick_finger_id = None
 joystick_offset = pygame.Vector2()
 fire_finger_id = None
@@ -365,10 +408,15 @@ async def main():
             if event.type == pygame.QUIT:
                 running = False
 
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_f:
+                toggle_fullscreen()
+
             # --- touch input ---
             if event.type == pygame.FINGERDOWN:
                 pos = pygame.Vector2(event.x * window_width, event.y * window_height)
-                if joystick_finger_id is None and pos.distance_to(JOYSTICK_CENTER) <= JOYSTICK_BASE_RADIUS:
+                if pos.distance_to(FULLSCREEN_BUTTON_CENTER) <= FULLSCREEN_BUTTON_RADIUS:
+                    toggle_fullscreen()
+                elif joystick_finger_id is None and pos.distance_to(JOYSTICK_CENTER) <= JOYSTICK_BASE_RADIUS:
                     joystick_finger_id = event.finger_id
                     joystick_offset = pos - JOYSTICK_CENTER
                 elif fire_finger_id is None and pos.distance_to(FIRE_BUTTON_CENTER) <= FIRE_BUTTON_RADIUS:
