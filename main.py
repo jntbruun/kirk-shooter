@@ -349,7 +349,9 @@ async def main():
     audio_ready = False
 
     while running:
-        dt = clock.tick(60) / 1000
+        # clamp dt so a backgrounded tab (frames paused) doesn't teleport
+        # sprites or spawn a meteor burst on the frame it regains focus
+        dt = min(clock.tick(60) / 1000, 0.1)
 
         # spawn meteors on a fixed interval (replaces pygame.time.set_timer)
         if game_state == "playing":
