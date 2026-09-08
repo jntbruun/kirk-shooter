@@ -11,6 +11,7 @@ A pygame-ce space shooter, built for the browser and mobile with [pygbag](https:
 | Move | `WASD` | left on-screen joystick |
 | Fire | `Space` | `FIRE` button |
 | Ultimate | `E` | `ULT` button |
+| Fullscreen | `F` | top-right button |
 | Restart after game over | `R` | tap anywhere |
 
 ## Project layout
