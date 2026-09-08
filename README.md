@@ -34,11 +34,23 @@ web build runs silent and only desktop loads sound. This is intentional — do n
 ## Rebuilding the web version
 
 ```bash
-python3 -m pygbag --build .
-cp build/web/* docs/
+export SSL_CERT_FILE=$(python3 -c "import certifi;print(certifi.where())")
+python3 -m pygbag --build --ume_block 0 --title "Kirk Shooter" --app_name "Kirk Shooter" .
+cp build/web/* docs/ && touch docs/.nojekyll
 ```
 
-Then commit `docs/`. GitHub Pages is configured to serve from `/docs` on `main`.
+Then commit `docs/`. GitHub Pages serves from `/docs` on `main`.
+
+- `SSL_CERT_FILE` — without it pygbag can't fetch its CDN template on a
+  python.org Python that has no CA bundle, and hangs.
+- `--ume_block 0` — the build has no audio, so skip the "click to unlock media"
+  gate and boot straight to the game.
+
+### pygbag / WASM constraints
+
+`pygame.time.set_timer` is not implemented on WASM. Meteors spawn from a `dt`
+accumulator in the async loop instead. Frame `dt` is clamped to 0.1s so a
+backgrounded tab doesn't teleport sprites on the frame it regains focus.
 
 ## Running on desktop
 
