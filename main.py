@@ -9,6 +9,8 @@ clock = pygame.time.Clock()
 # running inside the pygbag/emscripten browser build?
 _web = sys.platform == "emscripten"
 fullscreen = False
+_fs_supported = not _web          # desktop always; web decided at startup
+_fs_hint_until = 0                # show the "add to home screen" hint until this tick
 
 # classes
 class Player(pygame.sprite.Sprite):
@@ -249,6 +251,15 @@ def draw_fullscreen_button(surface):
         pygame.draw.line(surface, (255, 255, 255, 210), corner, (corner[0] + sx * arm, corner[1]), 3)
         pygame.draw.line(surface, (255, 255, 255, 210), corner, (corner[0], corner[1] + sy * arm), 3)
 
+    # shown briefly when fullscreen was tapped on a browser with no Fullscreen API (iPhone)
+    if pygame.time.get_ticks() < _fs_hint_until:
+        hint = small_font.render("Fullscreen unavailable here — use Share → Add to Home Screen",
+                                 True, (255, 255, 255))
+        hint_rect = hint.get_frect(midtop = (window_width / 2, 12))
+        bg = hint_rect.inflate(20, 12)
+        pygame.draw.rect(surface, (0, 0, 0, 170), bg, 0, 8)
+        surface.blit(hint, hint_rect)
+
 def reset_game():
     global player, round_start_time, meteors_killed
     all_sprites.empty()
@@ -300,20 +311,44 @@ def save_high_score(score):
     with open(HIGH_SCORE_FILE, "w") as f:
         f.write(str(score))
 
+def _js_pick(obj, *names):
+    # first attribute that actually exists on a JS proxy (handles vendor prefixes)
+    for n in names:
+        try:
+            fn = getattr(obj, n)
+        except AttributeError:
+            continue
+        if fn:
+            return fn
+    return None
+
 def toggle_fullscreen():
     # F key or the top-right button. On the web build this drives the browser's
-    # Fullscreen API (must be called straight from an input event to count as a
+    # Fullscreen API (called straight from the input event so it counts as a
     # user gesture); on desktop it flips the SDL window.
-    global fullscreen, display_surface
+    global fullscreen, display_surface, _fs_hint_until
     if _web:
         import platform
+        doc = platform.document
         try:
-            if platform.document.fullscreenElement:
-                platform.document.exitFullscreen()
+            in_fs = (getattr(doc, "fullscreenElement", None)
+                     or getattr(doc, "webkitFullscreenElement", None)
+                     or getattr(doc, "webkitCurrentFullScreenElement", None))
+            if in_fs:
+                exit_fn = _js_pick(doc, "exitFullscreen", "webkitExitFullscreen", "webkitCancelFullScreen")
+                if exit_fn:
+                    exit_fn()
             else:
-                platform.window.canvas.requestFullscreen()
+                req_fn = _js_pick(doc.documentElement, "requestFullscreen",
+                                  "webkitRequestFullscreen", "webkitRequestFullScreen")
+                if req_fn:
+                    req_fn()
+                else:
+                    # iPhone Safari has no Fullscreen API at all — the only
+                    # chromeless option there is Add to Home Screen (PWA).
+                    _fs_hint_until = pygame.time.get_ticks() + 4500
         except Exception:
-            pass  # browser refused (no gesture / disabled) — game keeps running
+            pass  # browser refused — game keeps running windowed
     else:
         fullscreen = not fullscreen
         flags = (pygame.FULLSCREEN | pygame.SCALED) if fullscreen else 0
@@ -329,6 +364,24 @@ running = True
 game_state = "playing"
 HIGH_SCORE_FILE = join(dirname(abspath(__file__)), "highscore.txt")
 high_score = load_high_score()
+
+# ---- web build: enable "Add to Home Screen" fullscreen + probe the Fullscreen API ----
+if _web:
+    import platform as _platform
+    try:
+        _doc = _platform.document
+        for _n, _c in (("apple-mobile-web-app-capable", "yes"),
+                       ("mobile-web-app-capable", "yes"),
+                       ("apple-mobile-web-app-status-bar-style", "black-translucent"),
+                       ("apple-mobile-web-app-title", "Kirk Shooter")):
+            _m = _doc.createElement("meta")
+            _m.setAttribute("name", _n)
+            _m.setAttribute("content", _c)
+            _doc.head.appendChild(_m)
+        _fs_supported = bool(_js_pick(_doc.documentElement, "requestFullscreen",
+                                     "webkitRequestFullscreen", "webkitRequestFullScreen"))
+    except Exception:
+        _fs_supported = False
 
 # imports
 font = pygame.font.Font("images/Oxanium-Bold.ttf", 40)
